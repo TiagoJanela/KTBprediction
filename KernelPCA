@@ -1,0 +1,98 @@
+import numpy as np
+import pandas as pd
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.externals import joblib
+from sklearn import metrics
+import pickle
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.linear_model import LinearRegression
+from openpyxl import load_workbook
+import openpyxl
+from openpyxl import Workbook
+import xlwings as xw
+import glob
+import xlsxwriter
+import plotly 
+import chart_studio.plotly as py
+import plotly.express as px
+#plotly.tools.set_credentials_file(username='TiagoJanela', api_key='LrVnMOZ6SCXMDN5foyfr')
+import matplotlib.pyplot as plt
+from plotly.offline import *
+
+
+#from sklearn.tree import export_graphviz
+#import pydot
+#from sklearn.model_selection import train_test_split
+#from scipy.stats import spearmanr, pearsonr
+
+
+pathdB='C:/Users/tiago/source/repos/Kernel_PCA_v1/'
+path_results = "T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/SVR/SVRresults/"
+
+filenameTR='kpca_dataset.xlsx'
+
+
+
+
+features = pd.read_excel(pathdB+filenameTR)   
+print(features.head())
+
+X = features
+y = features['LOGKTB']
+#features = features.drop('LOGKTB', axis=1) 
+
+train_mol_name = features["MOL_NAMES"]
+train_mol_name_drop = features.drop("MOL_NAMES", axis=1, inplace=True)  
+
+
+
+
+from sklearn.decomposition import KernelPCA
+kpca = KernelPCA(n_components = 3,kernel = 'rbf', gamma= 1) #n_components = 272,
+X_kernel_pca = kpca.fit_transform(X)
+
+
+pd_df = pd.DataFrame(X_kernel_pca, columns = ["p1","p2","p3"])
+pd_df["MOL_NAME"] = train_mol_name
+export_excel_pd_df = pd_df.to_excel ("C:/Users/tiago/source/repos/Kernel_pCA_v1/X_kernel_pca_fit_n2.xlsx", index = None, header=True)
+
+
+
+
+#2D rep
+
+
+import plotly.graph_objs as go
+
+#trace = go.scatter(
+#                    x=pd_df.p1,
+#                    y=pd_df.p2,
+#                    mode = "markers",
+#                    name = "Kernel PCA",
+#                    marker = dict(color = 'rgba(255, 128, 255, 0.8)' ),
+#                    text = ""+ train_mol_name + ""
+#                    )
+##data = [trace]
+##layout = dict(title = "Kernel PCA",
+##        xaxis=dict(title='PC1', showline=False),
+##        yaxis=dict(title='PC2', showline=False))
+        
+##fig = dict(data=data, layout=layout)
+##plotly.offline.plot(fig)
+
+
+
+#3D rep
+import plotly.express as px
+fig = px.scatter_3d(
+                    data_frame=pd_df,
+                    x="p1",
+                    y="p2",
+                    z="p3",
+                    text = "MOL_NAME"
+                    )
+
+fig.show()
