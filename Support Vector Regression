@@ -1,0 +1,167 @@
+import numpy as np
+import pandas as pd
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.externals import joblib
+from sklearn import metrics
+import pickle
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.linear_model import LinearRegression
+from openpyxl import load_workbook
+import openpyxl
+from openpyxl import Workbook
+import xlwings as xw
+import glob
+import xlsxwriter
+
+#import matplotlib.pyplot as plt
+#from sklearn.tree import export_graphviz
+#import pydot
+#from sklearn.model_selection import train_test_split
+#from scipy.stats import spearmanr, pearsonr
+
+pathmodel="C:/Users/tiago/source/repos/SVR_TRAIN_FIT_V2/"
+pathdB='T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/SVR/dB/'
+path_results = "T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/SVR/SVRresults/"
+
+filenameTR='190503_TR.xlsx'
+filenameTE='190503_TE.xlsx'
+filenameTR_pred="190503_TR_NEW_DATA_SVR.xlsx"
+filenameTE_pred="190503_TE_NEW_DATA_SVR.xlsx"
+filenameTR_metrics = "190503_TR_metrics_SVR.xlsx"
+filenameTE_metrics= "190503_TE_metrics_SVR.xlsx"
+
+
+features = pd.read_excel(pathdB+filenameTR)   
+print(features.head())
+
+
+train_labels = features['LOGKTB']
+features = features.drop('LOGKTB', axis=1) 
+
+train_mol_name = features["MOL_NAMES"]
+train_mol_name_drop = features.drop("MOL_NAMES", axis=1, inplace=True)  
+
+train = features
+
+
+
+
+
+# Create the model 
+
+kernel_v="poly"
+degree_v=4 
+C_v=10000
+epsilon_v=0.001
+gamma_v = "auto" 
+tol_v=0.001
+
+
+model = SVR(kernel=kernel_v,
+            degree = degree_v,
+            C = C_v,
+            epsilon = epsilon_v,
+            gamma = gamma_v,
+            tol = tol_v)
+
+model.fit(train, train_labels)
+
+
+
+
+#Tells the model to predict the train
+pred_train = model.predict(train) 
+
+
+
+#Results_TR
+
+TR_results = pd.DataFrame(list(zip(train_mol_name, train_labels,pred_train)), columns=["Mol_Names","Observed_TR", "Predicted_TR"])           #gives me the predicted value,the actual value for train
+
+print(TR_results)
+
+export_excel_TR = TR_results.to_excel (path_results+filenameTR_pred, index = None, header=True)
+
+
+
+#  Metrics _TR
+
+
+MSE = mean_squared_error(train_labels, pred_train)                                                     
+RMSE = np.sqrt(MSE)  
+MAE =  metrics.mean_absolute_error(train_labels, pred_train)              
+msg = "%s = %.5f" % (model, round(RMSE, 5))
+print('RMSE of', msg)   #Prints RMSE for train 
+print('Mean Absolute Error:', MAE)             #Prints MAE for train         
+TR_score = r2_score(train_labels, pred_train)   
+print(f'Train data R-2 score: {TR_score:>5.9}')  
+
+metrics_MSE_TR = {MSE}
+metrics_R2_TR = {TR_score}
+metrics_RMSE_TR = {RMSE}
+metrics_MAE_TR = {MAE}
+
+
+
+
+metrics_model_TR = pd.DataFrame(list(zip(metrics_MSE_TR, metrics_RMSE_TR, metrics_MAE_TR, metrics_R2_TR)), columns=["MSE","RMSE","MAE","R2"])
+
+export_excel_TR = metrics_model_TR.to_excel (path_results+filenameTR_metrics, index = None, header=True)
+
+
+
+
+
+#TEST
+
+features_test = pd.read_excel(pathdB+filenameTE)
+
+test_labels = features_test["LOGKTB"]
+test_labels_drop = features_test.drop('LOGKTB', axis=1, inplace=True)
+
+test_mol_name = features_test["MOL_NAMES"]
+test_mol_name_drop = features_test.drop("MOL_NAMES", axis=1, inplace=True) 
+
+test = features_test
+
+
+#Predict TEST
+pred_test = model.predict(test)
+
+#Results_TE
+
+TE_results = pd.DataFrame(list(zip(test_mol_name,test_labels, pred_test)), columns=["Mol_Name","Observed TE","Predicted TE"])           #gives me the predicted value,the actual value for train
+print(TE_results)
+
+export_excel_TE = TE_results.to_excel (path_results+filenameTE_pred, index = None, header=True)
+
+
+
+#  Metrics_TE
+
+MSE = mean_squared_error(test_labels, pred_test)                                               #MSE         
+RMSE = np.sqrt(MSE)  
+MAE =  metrics.mean_absolute_error(test_labels, pred_test)              
+msg = "%s = %.5f" % (model, round(RMSE, 5))
+print('RMSE of', msg)   #Prints RMSE for train 
+print('Mean Absolute Error:', MAE)             #Prints MAE for train         
+
+TE_score = r2_score(test_labels, pred_test)   
+print(f'TEST data R-2 score: {TE_score:>5.9}')  
+
+metrics_MSE_TE = {MSE}
+metrics_R2_TE = {TE_score}
+metrics_RMSE_TE = {RMSE}
+metrics_MAE_TE = {MAE}
+
+
+metrics_model_TE = pd.DataFrame(list(zip(metrics_MSE_TE, metrics_R2_TE, metrics_RMSE_TE, metrics_MAE_TE)), columns=["MSE","RMSE","MAE","R2"])
+
+export_excel_TE = metrics_model_TE.to_excel (path_results+filenameTE_metrics, index = None, header=True) 
+
+
+#This command is the one that save the model and the file:"'RandomForestOptimizedV1.pkl" its located in the model folder   
+joblib.dump(model, 'RF_LogKtb(0,1)Molecular Descriptors(0,1)_SVR.pkl')
