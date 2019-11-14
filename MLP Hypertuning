@@ -1,0 +1,435 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import spearmanr, pearsonr
+from pandas import ExcelWriter
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
+import pickle
+from sklearn import metrics
+from sklearn.externals import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
+from sklearn.neural_network import MLPRegressor
+from openpyxl import load_workbook
+import openpyxl
+from openpyxl import Workbook
+import xlwings as xw
+
+
+pathmodel="T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/MLP/Hypertuning_MLP/MLP_model_T/"
+pathdB='T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/MLP/dB/'
+path_results = "T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/MLP/Hypertuning_MLP/"
+
+
+filenameTR='190503_TR.xlsx'
+filenameTE='190503_TE.xlsx'
+
+
+
+
+
+hidden_layer_sizes_test_1 = [1,5,10,15,20,25,30,35]
+hidden_layer_sizes_test_2 = [1,5,10,15,20,25,30,35]
+activation_test = ["relu","identity", "logistic", "tanh"]
+solver_test = ["adam","lbfgs", "sgd"]
+alpha_test = [1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100]
+batch_size_test = ["auto"]
+learning_rate_test = ["constant", "invscaling", "adaptive"]
+max_iter_test = [200, 300, 400, 500, 600] #epochs
+shuffle_test = True
+early_stopping_test = [True, False]
+validation_fraction_test = 0.1
+
+
+
+
+
+startrowTR_1L = 1
+startrowTE_1L = 1
+startrow_PRED_TR_1L = 0
+startrow_PRED_TE_1L = 0
+startcol_PRED_TR_1L = 2
+startcol_PRED_TE_1L = 2
+
+filenameTR_metrics_init_1L= "MLP_TR_metrics_1L.xlsx"   
+filenameTE_metrics_init_1L= "MLP_TE_metrics_1L.xlsx"
+filenameTR_PRED_init_1L = "MLP_TR_HT_1L.xlsx"
+filenameTE_PRED_init_1L = "MLP_TE_HT_1L.xlsx"
+
+with pd.ExcelWriter(path_results+filenameTR_metrics_init_1L) as writerTR_1L:
+    with pd.ExcelWriter(path_results+filenameTE_metrics_init_1L) as writerTE_1L:
+        with pd.ExcelWriter(path_results+filenameTR_PRED_init_1L) as writer_TR_PRED_1L:
+            with pd.ExcelWriter(path_results+filenameTE_PRED_init_1L) as writer_TE_PRED_1L:
+                for _hidden_layer_sizes_1 in hidden_layer_sizes_test_1:
+                    for _activation in activation_test:
+                        for _solver in solver_test:
+                            for _alpha in alpha_test:
+                                for _batch_size in batch_size_test:
+                                    for _learning_rate in learning_rate_test:
+                                        for _max_iter in max_iter_test:
+                                            for _early_stopping in early_stopping_test:
+                         
+                                                filesufix= str(_hidden_layer_sizes_1)+ "_"+str(_activation)+"_"+str(_solver)+"_"+str(_alpha)+ "_"+str(_batch_size)+"_"+str(_learning_rate)+"_"+str(_max_iter)+"_"+str(_early_stopping)
+                
+                                                filenameTR_TE_sufix = ""+ filesufix + ""
+                                           
+                                                filenameMLPmodel='MLP_'+ filesufix  +'.pkl'
+                                                print ('*************************')
+                                                print (_hidden_layer_sizes_1," / ",_activation," / ",_solver," / ",_alpha," / ",_batch_size," / ",_learning_rate," / ",_max_iter," / ",_early_stopping)
+                                                
+                                                 # Loads TRAIN dB
+                                                features = pd.read_excel(pathdB+filenameTR)    
+                                                
+                                                
+                                                # Prepares the TRAIN variables
+                                                train_labels = features['LOGKTB']
+                                                features = features.drop('LOGKTB', axis=1) 
+
+                                                train_mol_name = features["MOL_NAMES"]
+                                                train_mol_name_drop = features.drop("MOL_NAMES", axis=1, inplace=True)  
+
+                                                train = features
+                
+                                                # Create the model , 
+                                                model = MLPRegressor(hidden_layer_sizes = (_hidden_layer_sizes_1,),
+                                                                     activation = _activation,
+                                                                     solver = _solver,
+                                                                     alpha = _alpha,
+                                                                     batch_size =  _batch_size,
+                                                                     learning_rate = _learning_rate,
+                                                                     max_iter = _max_iter,
+                                                                     early_stopping = _early_stopping
+                                                                     )
+
+
+                                                # Fit on training data
+                                                model.fit(train, train_labels)
+
+                                                #Tells the model to predict the train
+                                                pred_train = model.predict(train)  
+
+                                                #Export  TRAIN
+                                                
+                                                TR_MOLN_TR_labels = pd.DataFrame(list(zip(train_mol_name,train_labels)), columns=["DRUG NAME","OBSERVED TR"])
+                                    
+                                                TR_results = pd.DataFrame(list(zip(pred_train)))    
+
+                                                export_excel_TR = TR_results.to_excel (writer_TR_PRED_1L, startrow=startrow_PRED_TR_1L, startcol=startcol_PRED_TR_1L, index = False, header= [""+ filesufix + ""])
+
+
+                                                #Metrics_TR
+                                                MSE = mean_squared_error(train_labels, pred_train)                                                     
+                                                RMSE = np.sqrt(MSE)  
+                                                MAE =  metrics.mean_absolute_error(train_labels, pred_train)              
+                                                msg = "%s = %.5f" % (model, round(RMSE, 5))
+                 
+                                                TR_score = r2_score(train_labels, pred_train)   
+                                                
+
+                                                metrics_MSE_TR = {MSE}
+                                                metrics_R2_TR = {TR_score}
+                                                metrics_RMSE_TR = {RMSE}
+                                                metrics_MAE_TR = {MAE}
+
+                                            
+                            
+
+
+                                            
+                                                # Exports TR metrics
+
+                                                metrics_model_TR = pd.DataFrame(list(zip(metrics_MSE_TR, metrics_RMSE_TR, metrics_MAE_TR, metrics_R2_TR)), index = ["_" + filesufix + "_"])
+
+                                                export_excel_TR = metrics_model_TR.to_excel (writerTR_1L ,encoding='utf-8', startrow=startrowTR_1L, header=False)
+
+
+
+                                                # Prepares the test variables
+                                                features_test = pd.read_excel(pathdB+filenameTE)
+
+                                                test_labels = features_test["LOGKTB"]
+                                                test_labels_drop = features_test.drop('LOGKTB', axis=1, inplace=True)
+
+                                                test_mol_name = features_test["MOL_NAMES"]
+                                                test_mol_name_drop = features_test.drop("MOL_NAMES", axis=1, inplace=True) 
+
+                                                test = features_test
+
+
+                                                #Predict TEST
+                                                pred_test = model.predict(test)
+               
+                                                #Export  TEST
+                                                TE_MOLN_TE_labels = pd.DataFrame(list(zip(test_mol_name,test_labels)),  columns=["DRUG NAME","OBSERVED TE"])
+                                    
+                                                TE_results = pd.DataFrame(list(zip(pred_test)))          
+
+
+                                                export_excel_TE = TE_results.to_excel (writer_TE_PRED_1L, startrow=startrow_PRED_TE_1L, startcol=startcol_PRED_TE_1L, index = False, header= [""+ filesufix + ""])
+                
+                                                #  Metrics_TE
+                                                MSE = mean_squared_error(test_labels, pred_test)                                               #MSE         
+                                                RMSE = np.sqrt(MSE)  
+                                                MAE =  metrics.mean_absolute_error(test_labels, pred_test)              
+                                                msg = "%s = %.5f" % (model, round(RMSE, 5))
+                                         
+
+                                                TE_score = r2_score(test_labels, pred_test)   
+                                                
+
+                                                metrics_MSE_TE = {MSE}
+                                                metrics_R2_TE = {TE_score}
+                                                metrics_RMSE_TE = {RMSE}
+                                                metrics_MAE_TE = {MAE}
+
+                                            
+                                                # Exports TE metrics
+                                                metrics_model_TE = pd.DataFrame(list(zip(metrics_MSE_TE,  metrics_RMSE_TE, metrics_MAE_TE,metrics_R2_TE)), index = ["_" + filesufix + "_"])
+
+                                                export_excel_TE = metrics_model_TE.to_excel (writerTE_1L ,encoding='utf-8', startrow=startrowTE_1L, header = False)
+
+
+                                                # Saves model
+                                                from sklearn.externals import joblib
+                                                joblib.dump(model, pathmodel+filenameMLPmodel)
+
+                                                startrowTR_1L +=1
+                                                startrowTE_1L +=1
+                                                startcol_PRED_TR_1L += 1
+                                                startcol_PRED_TE_1L += 1
+    
+                                            
+print("END")
+print("END")
+
+wb = load_workbook(path_results + filenameTR_metrics_init_1L)
+sheet = wb.active
+sheet.cell(row=1, column=2).value = 'MSE'
+sheet.cell(row=1, column=3).value = 'RMSE'
+sheet.cell(row=1, column=4).value = 'MAE'
+sheet.cell(row=1, column=5).value = 'R2'
+
+wb.save(path_results + filenameTR_metrics_init_1L)
+
+wb = load_workbook(path_results + filenameTE_metrics_init_1L)
+sheet = wb.active
+sheet.cell(row=1, column=2).value = 'MSE'
+sheet.cell(row=1, column=3).value = 'RMSE'
+sheet.cell(row=1, column=4).value = 'MAE'
+sheet.cell(row=1, column=5).value = 'R2'
+
+wb.save(path_results + filenameTE_metrics_init_1L)
+
+#Places the Drug Name and observed TE in XLS
+wb = xw.Book(path_results + filenameTR_PRED_init_1L)
+sht = wb.sheets['sheet1']
+sht.range("A1:B1").options(index=False, header=True).value = TR_MOLN_TR_labels
+wb.save(path_results + filenameTR_PRED_init_1L)
+#wb.close()
+
+#Places the Drug Name and observed TE in XLS
+wb = xw.Book(path_results + filenameTE_PRED_init_1L)
+sht = wb.sheets['sheet1']
+sht.range("A1:B1").options(index=False, header=True).value = TE_MOLN_TE_labels
+wb.save(path_results + filenameTE_PRED_init_1L)
+#wb.close()
+
+
+
+# 2 Layers
+
+startrowTR_2L = 1
+startrowTE_2L = 1
+startrow_PRED_TR_2L = 0
+startrow_PRED_TE_2L = 0
+startcol_PRED_TR_2L = 2
+startcol_PRED_TE_2L = 2
+
+
+filenameTR_metrics_init_2L= "MLP_TR_metrics_2L.xlsx"   
+filenameTE_metrics_init_2L= "MLP_TE_metrics_2L.xlsx"
+filenameTR_PRED_init_2L = "MLP_TR_HT_2L.xlsx"
+filenameTE_PRED_init_2L = "MLP_TE_HT_2L.xlsx"
+
+with pd.ExcelWriter(path_results+filenameTR_metrics_init_2L) as writerTR_2L:
+    with pd.ExcelWriter(path_results+filenameTE_metrics_init_2L) as writerTE_2L:
+        with pd.ExcelWriter(path_results+filenameTR_PRED_init_2L) as writer_TR_PRED_2L:
+            with pd.ExcelWriter(path_results+filenameTE_PRED_init_2L) as writer_TE_PRED_2L:
+                for _hidden_layer_sizes_1 in hidden_layer_sizes_test_1:
+                    for _hidden_layer_sizes_2 in hidden_layer_sizes_test_2:
+                        for _activation in activation_test:
+                            for _solver in solver_test:
+                                for _alpha in alpha_test:
+                                    for _batch_size in batch_size_test:
+                                        for _learning_rate in learning_rate_test:
+                                            for _max_iter in max_iter_test:
+                                                for _early_stopping in early_stopping_test:
+                         
+                                                    filesufix= str(_hidden_layer_sizes_1)+ "_"+str(_hidden_layer_sizes_2)+"_"+str(_activation)+"_"+str(_solver)+"_"+str(_alpha)+ "_"+str(_batch_size)+"_"+str(_learning_rate)+"_"+str(_max_iter)+"_"+str(_early_stopping)
+                
+                                                    filenameTR_TE_sufix = ""+ filesufix + ""
+                                           
+                                                    filenameMLPmodel='MLP_'+ filesufix  +'.pkl'
+                                                    print ('*************************')
+                                                    print (_hidden_layer_sizes_1," / ",_hidden_layer_sizes_2," / ",_activation," / ",_solver," / ",_alpha," / ",_batch_size," / ",_learning_rate," / ",_max_iter," / ",_early_stopping)
+                                                    
+                                                    
+                                                    # Loads TRAIN dB
+                                                    features = pd.read_excel(pathdB+filenameTR)   
+                                                    
+                                                    # Prepares the TRAIN variables
+                                                    train_labels = features['LOGKTB']
+                                                    features = features.drop('LOGKTB', axis=1) 
+
+                                                    train_mol_name = features["MOL_NAMES"]
+                                                    train_mol_name_drop = features.drop("MOL_NAMES", axis=1, inplace=True)  
+
+                                                    train = features
+                
+                                                        # Create the model //, 
+                                                    model = MLPRegressor(hidden_layer_sizes = (_hidden_layer_sizes_1,_hidden_layer_sizes_2,),
+                                                                            activation = _activation,
+                                                                            solver = _solver,
+                                                                            alpha = _alpha,
+                                                                            batch_size =  _batch_size,
+                                                                            learning_rate = _learning_rate,
+                                                                            max_iter = _max_iter,
+                                                                            early_stopping = _early_stopping
+                                                                            )
+
+
+                                                    # Fit on training data
+                                                    model.fit(train, train_labels)
+
+                                                    #Tells the model to predict the train
+                                                    pred_train = model.predict(train)  
+
+                                                    #Export  TRAIN
+                                                    TR_MOLN_TR_labels = pd.DataFrame(list(zip(train_mol_name,train_labels)), columns=["DRUG NAME","OBSERVED TR"])
+                                    
+                                                    TR_results = pd.DataFrame(list(zip(pred_train)))    
+
+                                                    export_excel_TR = TR_results.to_excel (writer_TR_PRED_2L, startrow=startrow_PRED_TR_2L, startcol=startcol_PRED_TR_2L, index = False, header= [""+ filesufix + ""])
+
+
+                                                     #Metrics_TR
+                                                    MSE = mean_squared_error(train_labels, pred_train)                                               #MSE         
+                                                    RMSE = np.sqrt(MSE)  
+                                                    MAE =  metrics.mean_absolute_error(train_labels, pred_train)              
+                                                    msg = "%s = %.5f" % (model, round(RMSE, 5))
+                 
+                                                    TR_score = r2_score(train_labels, pred_train)   
+                                                    
+
+                                                    metrics_MSE_TR = {MSE}
+                                                    metrics_R2_TR = {TR_score}
+                                                    metrics_RMSE_TR = {RMSE}
+                                                    metrics_MAE_TR = {MAE}
+
+                                            
+                            
+
+
+                                            
+                                                    # Exports TR metrics
+
+                                                    metrics_model_TR = pd.DataFrame(list(zip(metrics_MSE_TR, metrics_RMSE_TR, metrics_MAE_TR, metrics_R2_TR)), index = ["_" + filesufix + "_"])
+
+                                                    export_excel_TR = metrics_model_TR.to_excel (writerTR_2L ,encoding='utf-8', startrow=startrowTR_2L, header = False)
+        
+      
+
+
+                                                    # Prepares the test variables
+                                                    features_test = pd.read_excel(pathdB+filenameTE)
+
+                                                    test_labels = features_test["LOGKTB"]
+                                                    test_labels_drop = features_test.drop('LOGKTB', axis=1, inplace=True)
+
+                                                    test_mol_name = features_test["MOL_NAMES"]
+                                                    test_mol_name_drop = features_test.drop("MOL_NAMES", axis=1, inplace=True) 
+
+                                                    test = features_test
+
+
+                                                    #Predict TEST
+                                                    pred_test = model.predict(test)
+               
+
+                                                    #Export  TEST
+                                                    TE_MOLN_TE_labels = pd.DataFrame(list(zip(test_mol_name,test_labels)),  columns=["DRUG NAME","OBSERVED TE"])
+                                    
+                                                    TE_results = pd.DataFrame(list(zip(pred_test)))          
+
+
+                                                    export_excel_TE = TE_results.to_excel (writer_TE_PRED_2L, startrow=startrow_PRED_TE_2L, startcol=startcol_PRED_TE_2L, index = False, header= [""+ filesufix + ""])
+                
+                                                    #  Metrics_TE
+                
+                                                    MSE = mean_squared_error(test_labels, pred_test)                                               #MSE         
+                                                    RMSE = np.sqrt(MSE)  
+                                                    MAE =  metrics.mean_absolute_error(test_labels, pred_test)              
+                                                    msg = "%s = %.5f" % (model, round(RMSE, 5))
+                                         
+
+                                                    TE_score = r2_score(test_labels, pred_test)   
+                                                    
+
+                                                    metrics_MSE_TE = {MSE}
+                                                    metrics_R2_TE = {TE_score}
+                                                    metrics_RMSE_TE = {RMSE}
+                                                    metrics_MAE_TE = {MAE}
+
+                                            
+                                                     # Exports TE metrics
+                                                    metrics_model_TE = pd.DataFrame(list(zip(metrics_MSE_TE, metrics_RMSE_TE, metrics_MAE_TE, metrics_R2_TE)), index = ["_" + filesufix + "_"])
+
+                                                    export_excel_TE = metrics_model_TE.to_excel (writerTE_2L ,encoding='utf-8', startrow=startrowTE_2L, header = False)
+
+
+                                                    # Saves model
+                                                    from sklearn.externals import joblib
+                                                    joblib.dump(model, pathmodel+filenameMLPmodel)
+
+                                                    startrowTR_2L +=1
+                                                    startrowTE_2L +=1
+                                                    startcol_PRED_TR_2L += 1
+                                                    startcol_PRED_TE_2L += 1
+    
+                                                    
+print('******************* END **********************')
+print ("END")
+
+
+# Places metric's names TR as header
+wb = load_workbook(path_results + filenameTR_metrics_init_2L)
+sheet = wb.active
+sheet.cell(row=1, column=2).value = 'MSE'
+sheet.cell(row=1, column=3).value = 'RMSE'
+sheet.cell(row=1, column=4).value = 'MAE'
+sheet.cell(row=1, column=5).value = 'R2'
+wb.save(path_results + filenameTR_metrics_init_2L)
+
+# Places metric's names TE as header
+wb = load_workbook(path_results + filenameTE_metrics_init_2L)
+sheet = wb.active
+sheet.cell(row=1, column=2).value = 'MSE'
+sheet.cell(row=1, column=3).value = 'RMSE'
+sheet.cell(row=1, column=4).value = 'MAE'
+sheet.cell(row=1, column=5).value = 'R2'
+wb.save(path_results + filenameTE_metrics_init_2L)
+
+#Places the Drug Name and observed TE in XLS
+wb = xw.Book(path_results + filenameTR_PRED_init_2L)
+sht = wb.sheets['sheet1']
+sht.range("A1:B1").options(index=False, header=True).value = TR_MOLN_TR_labels
+wb.save(path_results + filenameTR_PRED_init_2L)
+#wb.close()
+
+#Places the Drug Name and observed TE in XLS
+wb = xw.Book(path_results + filenameTE_PRED_init_2L)
+sht = wb.sheets['sheet1']
+sht.range("A1:B1").options(index=False, header=True).value = TE_MOLN_TE_labels
+wb.save(path_results + filenameTE_PRED_init_2L)
+#wb.close()
