@@ -1,0 +1,231 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import spearmanr, pearsonr
+from pandas import ExcelWriter
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
+import pickle
+from sklearn import metrics
+from sklearn.externals import joblib
+from sklearn.model_selection import train_test_split
+from openpyxl import load_workbook
+import openpyxl
+from openpyxl import load_workbook
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl import Workbook
+import xlwings as xw
+
+pathmodel="T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/RF/Hypertuning_RF/RF_model/"
+pathdB='T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/RF/dB/'
+path_results = "T:/OneDrive - Universidade de Lisboa/Database_LOGKTB/RF/Hypertuning_RF/"
+
+
+filenameTR='190503_TR.xlsx'
+filenameTE='190503_TE.xlsx'
+
+
+
+from sklearn.ensemble import RandomForestRegressor
+nestimators_test = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 250, 500, 1000, 2000, 3000, 4000, 5000]       
+maxfeatures_test = [1, 10, 100, 200, 272, "sqrt", "log2", "auto"]
+maxdepth_test = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] 
+minsamplesleaf_test = [1, 2, 3, 4, 5, 10, 50, 100]
+minsamplessplit_test = [2, 3, 4, 5, 10, 50, 100, 1000] 
+bootstrap_var = [True, False] 
+
+
+
+startrowTR = 1
+startrowTE = 1
+startrow_PRED_TR = 0
+startrow_PRED_TE = 0
+startcol_PRED_TR = 2
+startcol_PRED_TE = 2
+
+filenameTR_metrics_init = "RF_TR_metrics_HT.xlsx"           
+filenameTE_metrics_init = "RF_TE_metrics_HT.xlsx"
+filenameTR_PRED_init = "RF_TR_HT.xlsx"
+filenameTE_PRED_init = "RF_TE_HT.xlsx"
+
+
+
+with pd.ExcelWriter(path_results+filenameTR_metrics_init) as writerTR:
+        with pd.ExcelWriter(path_results+filenameTE_metrics_init) as writerTE:
+            with pd.ExcelWriter(path_results+filenameTR_PRED_init) as writer_TR_PRED:
+                with pd.ExcelWriter(path_results+filenameTE_PRED_init) as writer_TE_PRED:
+                    for nestimators in nestimators_test:
+                        for maxdepth in maxdepth_test:
+                            for maxfeatures in maxfeatures_test:
+                                for minsamplessplit in minsamplessplit_test:
+                                    for minsamplesleaf in minsamplesleaf_test:
+                                    
+                                    
+                                    
+                                        filesufix=str(nestimators)+"_"+str(maxdepth)+"_"+str(maxfeatures)+"_"+str(minsamplessplit)+"_"+str(minsamplesleaf)
+                                    
+                                        filenameTR_TE_sufix = ""+ filesufix + ""
+                                        filenameSVRmodel='RF_'+ filesufix  +'.pkl'
+                        
+
+                                        print ('*************************')
+                                        print (nestimators," / ",maxdepth," / ",maxfeatures," / ",minsamplessplit," / ",minsamplesleaf)
+        
+                                        # Loads TRAIN dB
+                                        features = pd.read_excel(pathdB+filenameTR)    
+
+
+                                        # Prepares the TRAIN variables
+                                        train_labels = features['LOGKTB']
+                                        features = features.drop('LOGKTB', axis=1) 
+
+                                        train_mol_name = features["MOL_NAMES"]
+                                        train_mol_name_drop = features.drop("MOL_NAMES", axis=1, inplace=True)  
+
+                                        train = features
+                
+                                        # Create the model // random_state=42, 
+                                        model = RandomForestRegressor(n_estimators= nestimators,        
+                                                                        max_features = maxfeatures ,
+                                                                        max_depth = maxdepth, 
+                                                                        bootstrap = bootstrap_var, 
+                                                                        min_samples_leaf = minsamplesleaf, 
+                                                                        min_samples_split = minsamplessplit
+                                                                        )
+
+                                        # Fit on training data
+                                        model.fit(train, train_labels)
+                                    
+                                        #Tells the model to predict the train
+                                        pred_train = model.predict(train)  
+        
+                                    
+                                        #Export  TRAIN
+                                        TR_MOLN_TR_labels = pd.DataFrame(list(zip(train_mol_name,train_labels)), columns=["DRUG NAME","OBSERVED TR"])
+                                    
+                                        TR_results = pd.DataFrame(list(zip(pred_train)))    
+
+                                        export_excel_TR = TR_results.to_excel (writer_TR_PRED, startrow=startrow_PRED_TR, startcol=startcol_PRED_TR, index = False, header= [""+ filesufix + ""])
+  
+               
+               
+                                        #Metrics_TR
+                                        MSE = mean_squared_error(train_labels, pred_train)                                                  #MSE         
+                                        RMSE = np.sqrt(MSE)                                                                                 #RMSE for train                 
+                                        MAE =  metrics.mean_absolute_error(train_labels, pred_train)                                        #MAE for train
+                                        msg = "%s = %.4f" % (model, round(RMSE, 3))
+                 
+                                        TR_score = r2_score(train_labels, pred_train)                                                       #R2 train               
+                                                                              
+                                       
+                                        metrics_MSE_TR = {MSE}
+                                        metrics_R2_TR = {TR_score}
+                                        metrics_RMSE_TR = {RMSE}
+                                        metrics_MAE_TR = {MAE}
+
+
+                                        # Exports TR metrics
+
+                                        metrics_model_TR = pd.DataFrame(list(zip(metrics_MSE_TR, metrics_RMSE_TR, metrics_MAE_TR, metrics_R2_TR)), index = ["_" + filesufix + "_"])
+
+                                        export_excel_TR = metrics_model_TR.to_excel (writerTR ,encoding='utf-8', startrow=startrowTR, header=False)
+
+
+        
+                
+   
+                                        # Prepares the test variables
+                                        features_test = pd.read_excel(pathdB+filenameTE)
+
+                                        test_labels = features_test["LOGKTB"]
+                                        test_labels_drop = features_test.drop('LOGKTB', axis=1, inplace=True)
+
+                                        test_mol_name = features_test["MOL_NAMES"]
+                                        test_mol_name_drop = features_test.drop("MOL_NAMES", axis=1, inplace=True) 
+
+                                        test = features_test
+
+
+                                        #Predict TEST
+                                        pred_test = model.predict(test)
+               
+
+                                        #Export  TEST
+                                        TE_MOLN_TE_labels = pd.DataFrame(list(zip(test_mol_name,test_labels)),  columns=["DRUG NAME","OBSERVED TR"])
+                                    
+                                        TE_results = pd.DataFrame(list(zip(pred_test)))          
+
+
+                                        export_excel_TE = TE_results.to_excel (writer_TE_PRED, startrow=startrow_PRED_TE, startcol=startcol_PRED_TE, index = False, header= [""+ filesufix + ""])
+                
+
+                                        #  Metrics_TE
+
+                                        MSE = mean_squared_error(test_labels, pred_test)                                               #MSE         
+                                        RMSE = np.sqrt(MSE)  
+                                        MAE =  metrics.mean_absolute_error(test_labels, pred_test)              
+                                        msg = "%s = %.5f" % (model, round(RMSE, 5))
+                                         
+
+                                        TE_score = r2_score(test_labels, pred_test)   
+                                      
+
+                                        metrics_MSE_TE = {MSE}
+                                        metrics_R2_TE = {TE_score}
+                                        metrics_RMSE_TE = {RMSE}
+                                        metrics_MAE_TE = {MAE}
+
+                                        # Exports TE metrics
+                                        metrics_model_TE = pd.DataFrame(list(zip(metrics_MSE_TE, metrics_RMSE_TE, metrics_MAE_TE,metrics_R2_TE)), index = ["_" + filesufix + "_"])
+
+                                        export_excel_TE = metrics_model_TE.to_excel (writerTE ,encoding='utf-8', startrow=startrowTE, header=False)
+
+
+                                        # Saves model
+                                        from sklearn.externals import joblib                                                                                          
+      
+                                        joblib.dump(model, pathmodel+filenameSVRmodel )
+
+                                        startrowTR +=1
+                                        startrowTE +=1
+                                        startcol_PRED_TR += 1
+                                        startcol_PRED_TE += 1
+
+
+
+print('******************* END **********************')
+
+# Places metric's names TR as header
+wb = load_workbook(path_results + filenameTR_metrics_init)
+sheet = wb.active
+sheet.cell(row=1, column=2).value = 'MSE'
+sheet.cell(row=1, column=3).value = 'RMSE'
+sheet.cell(row=1, column=4).value = 'MAE'
+sheet.cell(row=1, column=5).value = 'R2'
+wb.save(path_results + filenameTR_metrics_init)
+
+# Places metric's names TE as header
+wb = load_workbook(path_results + filenameTE_metrics_init)
+sheet = wb.active
+sheet.cell(row=1, column=2).value = 'MSE'
+sheet.cell(row=1, column=3).value = 'RMSE'
+sheet.cell(row=1, column=4).value = 'MAE'
+sheet.cell(row=1, column=5).value = 'R2'
+wb.save(path_results + filenameTE_metrics_init)
+
+
+
+#Places the Drug Name and observed TE in XLS
+wb = xw.Book(path_results + filenameTR_PRED_init)
+sht = wb.sheets['sheet1']
+sht.range("A1:B1").options(index=False, header=True).value = TR_MOLN_TR_labels
+wb.save(path_results + filenameTR_PRED_init)
+#wb.close()
+
+#Places the Drug Name and observed TE in XLS
+wb = xw.Book(path_results + filenameTE_PRED_init)
+sht = wb.sheets['sheet1']
+sht.range("A1:B1").options(index=False, header=True).value = TE_MOLN_TE_labels
+wb.save(path_results + filenameTE_PRED_init)
+#wb.close()
