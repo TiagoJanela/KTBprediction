@@ -1,0 +1,87 @@
+import pandas as pd
+import numpy as np
+from rdkit import Chem
+from rdkit.Chem import Draw, Descriptors
+from matplotlib import pyplot as plt
+
+
+
+pathmodel="C:/Users/tiago/source/repos/SVR_TRAIN_FIT_V2/"
+pathdB='T:/OneDrive - Universidade de Lisboa/TRABALHO DE CAMPO/'
+path_results = "T:/OneDrive - Universidade de Lisboa/TRABALHO DE CAMPO/"
+
+
+
+smifile = "T:/OneDrive - Universidade de Lisboa/TRABALHO DE CAMPO/Python AS_S.xlsx"
+data = pd.read_excel(smifile)
+
+#from sklearn.cross_validation import train_test_split
+
+train_labels = data['Label']
+#train_labels = features.drop('Label', axis=1) 
+train_mol_name = data["Name"]
+#train_mol_name_drop = features.drop("Name", axis=1, inplace=True)
+#train_mol_SMILES = features["SMILES"]
+
+
+data.smiles = data["SMILES"]
+
+charset = set("".join(list(data.smiles))+"!E")
+char_to_int = dict((c,i) for i,c in enumerate(charset))
+int_to_char = dict((i,c) for i,c in enumerate(charset))
+embed = max([len(smile) for smile in data.smiles]) + 5
+
+def vectorize(smiles):
+        one_hot =  np.zeros((smiles.shape[0], embed , len(charset)),dtype=np.int8)
+        for i,smile in enumerate(smiles):
+            #encode the startchar
+            one_hot[i,0,char_to_int["!"]] = 1
+            #encode the rest of the chars
+            for j,c in enumerate(smile):
+                one_hot[i,j+1,char_to_int[c]] = 1
+            #Encode endchar
+            one_hot[i,len(smile)+1:,char_to_int["E"]] = 1
+        #Return two, one for input and the other for output
+        return one_hot
+        print (one_hot)
+
+
+Vectorize_results = vectorize(data.smiles.values)           #gives me the predicted value,the actual value for train
+
+print(Vectorize_results)
+
+#export_excel_Vectorize_results = Vectorize_results.to_excel ("T:/OneDrive - Universidade de Lisboa/TRABALHO DE CAMPO/Vectorize SMILES.xlsx", index = None, header=True)
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test, X_train_mol_name, y_train_mol_name= train_test_split(Vectorize_results, train_labels, train_mol_name, test_size=.20, random_state=42)
+
+
+#reshape the input data into a 2-dimensional array
+dataset_size_TR = len(X_train)         
+TwoDim_dataset_TR = X_train.reshape(dataset_size_TR,-1)
+dataset_size_TE = len(X_test)
+TwoDim_dataset_TE = X_test.reshape(dataset_size_TE,-1)
+
+
+
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+
+svclassifier = SVC(kernel='linear')
+svclassifier.fit(TwoDim_dataset_TR, y_train)
+
+pred_train = svclassifier.predict(TwoDim_dataset_TR)
+
+pred_test = svclassifier.predict(TwoDim_dataset_TE)
+
+TR_results = pd.DataFrame(list(zip(y_train_mol_name,pred_train,y_train)), columns=["Mol_Names","TR_results", "Labels"]) 
+
+TE_results = pd.DataFrame(list(zip(X_train_mol_name,pred_test,y_test)), columns=["Mol_Names","TE_results", "Labels"]) 
+
+export_excel_TR_results = TR_results.to_excel ("T:/OneDrive - Universidade de Lisboa/TRABALHO DE CAMPO/TR_results.xlsx", index = None, header=True)
+
+export_excel_TE_results = TE_results.to_excel ("T:/OneDrive - Universidade de Lisboa/TRABALHO DE CAMPO/TE_results.xlsx", index = None, header=True)
+
+from sklearn.metrics import accuracy_score
+
+print(accuracy_score(y_test, pred_test))
