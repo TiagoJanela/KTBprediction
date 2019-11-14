@@ -1,0 +1,131 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import spearmanr, pearsonr
+from pandas import ExcelWriter
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
+import pickle
+from sklearn import metrics
+from sklearn.externals import joblib
+from sklearn.model_selection import train_test_split
+
+
+pathmodel="C:/Users/tiago/source/repos/SVR_train_fit/"
+pathdB='T:/OneDrive - Universidade de Lisboa/SVR/dB/'
+pathresults = "T:/OneDrive - Universidade de Lisboa/SVR/SVRresults/"
+
+
+filenameTR='dB_55387_TR.xlsx'
+filenameTE='dB_55387_TE.xlsx'
+
+
+
+features = pd.read_excel(pathdB+filenameTR)    #ahgahahahah
+print(features.head())
+
+
+
+
+# Labels are the values we want to predict
+#labels = np.array(features.pop('LOGKTB'))
+labels = features['LOGKT:B']
+mol_name = features["MOL_NAMES"] 
+
+# Remove the labels from the features
+# axis 1 refers to the columns
+features=features.drop('LOGKT:B', axis=1) 
+mol_names = features.drop("MOL_NAMES", axis=1, inplace=True) 
+
+
+from sklearn.svm import LinearSVR, NuSVR, SVR
+kernel_test = ["linear", "poly","rbf", "sigmoid"]     
+degree_test = [2,3,4,5]
+C_test = [0.001, 0.01, 0.1, 1, 10,100,1000, 10000]
+epsilon_test = [0.0001, 0.001, 0.01, 0.1, 1]
+
+
+
+
+
+for _kernel in kernel_test:
+    filesufix = str(_kernel)
+    filenameTRpred='predicted_train_'+ filesufix + '.xlsx'
+    filenameTEpred='PredictedNewData_'+ filesufix +'.xlsx'
+    with pd.ExcelWriter(filenameTRpred) as TR_writer:
+        with pd.ExcelWriter(filenameTEpred) as TE_writer:
+            for _degree in degree_test:
+                for _C in C_test:
+                    for _epsilon in epsilon_test:
+                
+                
+              
+                    
+                        filenameSVRmodel='SVR_'+ filesufix  +'.pkl'
+                        print ('*************************')
+                        print (_kernel," / ",_degree," / ",_C," / ",_epsilon)
+        
+                        train, test, train_labels, test_labels = train_test_split(features, labels, test_size = 0.0)
+                        # Create the model // random_state=42, 
+                        model = SVR(kernel = _kernel,        
+                                    degree = _degree,
+                                    C = _C,
+                                    epsilon = _epsilon
+                                    )
+
+                        # Fit on training data
+                        model.fit(train, train_labels)
+    
+                        predicted_train = model.predict(train)  #Tells the model to predict the train
+        
+                        MSE = mean_squared_error(train_labels, predicted_train)                                               #MSE         
+                        RMSE = np.sqrt(MSE)                                                                                   #RMSE for train                 
+                        msg = "%s = %.4f" % (model, round(RMSE, 3))
+                        #print('RMSE of', msg)                                                                                 #Prints RMSE for train 
+                        #print('MAE:', metrics.mean_absolute_error(train_labels, predicted_train))             #Prints MAE for train         
+                        train_score = r2_score(train_labels, predicted_train)                                               #r2 train               
+                        print('Train R2:', train_score)                        #Prints r2 train               
+                                       
+
+
+        
+                        delta = pd.DataFrame(list(zip(mol_name,train_labels, predicted_train)), columns=["mol_name","actual", "predicted"])           
+        
+    
+                        if _kernel !="poly":
+                            sheetName = "no-degree_" + str(_C) + "_" + str(_epsilon)
+                        else:
+                            sheetName = str(_degree) + "_" + str(_C) + "_" + str(_epsilon)
+                
+                    
+                        export_excel_TR = delta.to_excel (TR_writer, pathresults+filenameTRpred, index = None, header=True, sheet_name = sheetName)
+        
+        
+        
+      
+
+                        pr = pd.read_excel(pathdB+filenameTE)
+                        mol_names_TE = pr["MOL_NAMES"]
+                        mol_names_TE_drop = pr.drop("MOL_NAMES", axis=1, inplace=True) 
+                        observed_TE = pr["LOGKT:B"]
+                        observed_TE_drop = pr.drop('LOGKT:B', axis=1) # axis 1 refers to the columns
+                        pred_cols = list(pr.columns.values)[:272]
+        
+                        # apply the whole pipeline to data
+                        pred_test = model.predict(pr[pred_cols])
+                        # print (pred_test)
+                        pred_data = pd.DataFrame(list(zip(mol_names_TE, pred_test,observed_TE)), columns=["mol_names","predicted","observed_TE"])           #gives me the predicted value,the actual value for train
+                        #print(pred_data)
+        
+                        export_excel_TE = pred_data.to_excel (TE_writer, pathresults+filenameTEpred, index = None, header=True, sheet_name = sheetName)
+        
+
+
+
+                        from sklearn.externals import joblib                                                                                          
+      
+                        joblib.dump(model, pathmodel+filenameSVRmodel )
+
+
+        
+                        print('******************* END **********************')
